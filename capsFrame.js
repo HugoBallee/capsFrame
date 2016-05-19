@@ -7,28 +7,20 @@ function myFunction() {
     var k = document.getElementById("kField").value;
     var maxIterations = document.getElementById("maxIterationsField").value;
     var backgroundColor = document.getElementById("colorField").value;
-    var backgroundColor = hexToColor(backgroundColor);
-
+    backgroundColor = ColorFromHex(backgroundColor);
+    var quincux = document.getElementById("quincux").checked;
+    
     var kMeansResults = kMeans(pixels, k, maxIterations);
     var prunedColors = kMeanResultsToColors(kMeansResults);
 
-    var capsed = capsPicture(prunedColors, squareSize, backgroundColor);
+    var capsed = capsPicture(prunedColors, squareSize, backgroundColor, quincux);
 
     setRenderCanvas("renderCanvas", capsed.colors);
 
     document.getElementById("demo").innerHTML = capsed.nbCaps + " caps";
 }
 
-function hexToColor(hex) {
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : null;
-}
-
-function capsPicture(colors, squareSize) {
+function capsPicture(colors, squareSize, backgroundColor, quincunx) {
     var oldWidth = colors.length;
     var oldHeight = colors[0].length;
     var newWidth = Math.floor(oldWidth / squareSize) * squareSize;
@@ -41,38 +33,51 @@ function capsPicture(colors, squareSize) {
     var newColors = [];
     for (var i = 0; i < newWidth; ++i) {
         newColors[i] = [];
-        for (var j = 0; j < newHeight; ++j) {
-            newColors[i][j] = randomColor();
-        }
+        for (var j = 0; j < newHeight; ++j)
+            newColors[i][j] = ColorRandom();
     }
 
-    for (i = 0; i < newWidth; i = i + squareSize) {
-
-        for (j = 0; j < newHeight; j = j + squareSize) {
-            var mainColor = getMainColor(colors, i + offsetX, j + offsetY, squareSize, squareSize);
-            for (var m = 0; m < squareSize; ++m) {
-                for (var n = 0; n < squareSize; ++n) {
-                    newColors[i + m][j + n] = mainColor;
+    if (quincunx) {
+        for (i = 0; i < newWidth; i = i+1)
+            for (j = 0; j < newHeight; j = j+1)
+                newColors[i][j] = backgroundColor;
+    } else {
+        var hSquareSize = squareSize * 0.5;
+        for (i = 0; i < newWidth; i = i + squareSize) {
+            for (j = 0; j < newHeight; j = j + squareSize) {
+                var mainColor = getMainColor(colors, i + offsetX, j + offsetY, squareSize, squareSize);
+                var center = {x:i+hSquareSize, y:j+hSquareSize};
+                for (var m = 0; m < squareSize; ++m) {
+                    for (var n = 0; n < squareSize; ++n) {
+                        var point = {x:(i+m), y:(j+n)};
+                        if (isInCircle(center, hSquareSize, point))
+                            newColors[i + m][j + n] = mainColor;
+                        else
+                            newColors[i + m][j + n] = backgroundColor;
+                    }
                 }
             }
         }
     }
 
-    return {
-        colors: newColors,
-        nbCaps: nbSquares
-    };
+    return { colors: newColors, nbCaps: nbSquares };
+}
+
+function isInCircle(center, radius, point) {
+    return squareDist(center, point) <= (radius*radius);
+}
+
+function squareDist(pointA, pointB) {
+    return (pointA.x - pointB.x) * (pointA.x - pointB.x) + (pointA.y - pointB.y) * (pointA.y - pointB.y);
 }
 
 function getMainColor(colors, x, y, width, height) {
     var colorsIn = [];
 
     function indexColorIn(colorsIn, color) {
-        for (var it = 0; it < colorsIn.length; ++it) {
-            if (equalsColors(colorsIn[it].color, color)) {
+        for (var it = 0; it < colorsIn.length; ++it)
+            if (color.equals(colorsIn[it].color))
                 return it;
-            }
-        }
         return -1;
     }
 
@@ -80,29 +85,19 @@ function getMainColor(colors, x, y, width, height) {
         for (var p = y; p < y + height; ++p) {
             if (colorsIn.length > 0) {
                 var indexColor = indexColorIn(colorsIn, colors[o][p]);
-                if (indexColor >= 0) {
+                if (indexColor >= 0)
                     colorsIn[indexColor].count++;
-                } else {
-                    colorsIn.push({
-                        color: colors[o][p],
-                        count: 1
-                    });
-                }
-            } else {
-                colorsIn.push({
-                    color: colors[o][p],
-                    count: 1
-                });
-            }
+                else
+                    colorsIn.push({ color: colors[o][p], count: 1 });
+            } else
+                colorsIn.push({ color: colors[o][p], count: 1 });
         }
     }
 
     var idMaxCount = 0;
-    for (o = 1; o < colorsIn.length; ++o) {
-        if (colorsIn.count > colorsIn[idMaxCount].count) {
+    for (o = 1; o < colorsIn.length; ++o)
+        if (colorsIn.count > colorsIn[idMaxCount].count)
             idMaxCount = o;
-        }
-    }
 
     return colorsIn[idMaxCount].color;
 }
@@ -113,9 +108,8 @@ function kMeanResultsToColors(kMeanResults) {
     var means = kMeanResults.means;
     for (var i = 0; i < clusters.length; ++i) {
         colors[i] = [];
-        for (var j = 0; j < clusters[i].length; ++j) {
+        for (var j = 0; j < clusters[i].length; ++j)
             colors[i][j] = means[clusters[i][j]];
-        }
     }
     return colors;
 }
@@ -129,63 +123,14 @@ function setRenderCanvas(renderCanvasId, colors) {
     c.height = height;
 
     var ctx = c.getContext("2d");
-    ctx.fillStyle = color2rgbText(randomColor());
+    ctx.fillStyle = ColorRandom().toString();
     ctx.fillRect(0, 0, width, height);
     for (var i = 0; i < width; ++i) {
         for (var j = 0; j < height; ++j) {
-            ctx.fillStyle = color2rgbText(colors[i][j]);
+            ctx.fillStyle = colors[i][j].toString();
             ctx.fillRect(i, j, 1, 1);
         }
     }
-}
-
-function equalsColors(colorA, colorB) {
-    if (colorA.r == colorB.r && colorA.g == colorB.g && colorA.b == colorB.b) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-function color(red, green, blue) {
-    return {
-        r: red,
-        g: green,
-        b: blue
-    };
-}
-
-function color2rgbText(color) {
-    return "rgb(" + color.r + "," + color.g + "," + color.b + ")";
-}
-
-function colorsSquareDistance(colorA, colorB) {
-    return (colorA.r - colorB.r) * (colorA.r - colorB.r) + (colorA.g - colorB.g) * (colorA.g - colorB.g) + (colorA.b - colorB.b) * (colorA.b - colorB.b);
-}
-
-function addColors(colorA, colorB) {
-    return {
-        r: colorA.r + colorB.r,
-        g: colorA.g + colorB.g,
-        b: colorA.b + colorB.b
-    };
-}
-
-function divideColor(color, div) {
-    if (div <= 0) return color;
-    else return {
-        r: (color.r / div),
-        g: (color.g / div),
-        b: (color.b / div)
-    };
-}
-
-function floorColor(color) {
-    return {
-        r: Math.floor(color.r),
-        g: Math.floor(color.g),
-        b: Math.floor(color.b)
-    };
 }
 
 function pictureData(pictureId) {
@@ -201,44 +146,18 @@ function pictureData(pictureId) {
     for (var i = 0; i < img.width; ++i) {
         pixels[i] = [];
         var pixelData = canvas.getContext('2d').getImageData(i, 0, 1, img.height).data;
-        for (var j = 0; j < img.height; ++j) {
-            pixels[i][j] = color(pixelData[j * 4], pixelData[j * 4 + 1], pixelData[j * 4 + 2]);
-        }
+        for (var j = 0; j < img.height; ++j)
+            pixels[i][j] = new Color(pixelData[j*4], pixelData[j*4+1], pixelData[j*4+2]);
     }
 
     return pixels;
 }
 
-function pictureData2ColorArray(pictureData) {
-    var colors = [];
-    for (var i = 0; i < pictureData.length; i += 4) {
-        var color = {
-            r: pictureData[i],
-            g: pictureData[i + 1],
-            b: pictureData[i + 2]
-        };
-        colors.push(color);
-    }
-    return colors;
-}
-
-function random(min, max) {
-    return Math.floor((Math.random() * (max - min)) + min);
-}
-
-function randomColor() {
-    return {
-        r: random(0, 255),
-        g: random(0, 255),
-        b: random(0, 255)
-    };
-}
-
 function getClosestId(color, colorClusters) {
     var minId = 0;
-    var minSquareDist = colorsSquareDistance(color, colorClusters[0]);
+    var minSquareDist = color.squareDistance(colorClusters[0]);
     for (var it = 1; it < colorClusters.length; ++it) {
-        var squareDist = colorsSquareDistance(color, colorClusters[it]);
+        var squareDist = color.squareDistance(colorClusters[it]);
         if (squareDist < minSquareDist) {
             minSquareDist = squareDist;
             minId = it;
@@ -250,21 +169,15 @@ function getClosestId(color, colorClusters) {
 function kMeans(colors, k, maxIterations) {
     var means = [];
     var clusters = [];
-    for (var i = 0; i < k; i++) {
-        var rnd = randomColor();
-        means.push(rnd);
-    }
+    for (var i = 0; i < k; i++)
+        means.push(ColorRandom());
 
     for (var iteration = 0; iteration < maxIterations; ++iteration) {
         var numberPerClusters = [];
         var newMeans = [];
         for (i = 0; i < k; ++i) {
             numberPerClusters.push(0);
-            newMeans.push({
-                r: 0,
-                g: 0,
-                b: 0
-            });
+            newMeans.push(new Color(0, 0, 0));
         }
         clusters = [];
         for (i = 0; i < colors.length; ++i) {
@@ -273,20 +186,79 @@ function kMeans(colors, k, maxIterations) {
                 var closestId = getClosestId(colors[i][j], means);
                 clusters[i][j] = closestId;
                 numberPerClusters[closestId]++;
-                newMeans[closestId] = addColors(newMeans[closestId], colors[i][j]);
+                newMeans[closestId] = newMeans[closestId].add(colors[i][j]);
             }
         }
-        for (i = 0; i < k; ++i) {
-            means[i] = divideColor(newMeans[i], numberPerClusters[i]);
-        }
+        for (i = 0; i < k; ++i)
+            means[i] = newMeans[i].divide(numberPerClusters[i]);
     }
 
-    for (i = 0; i < k; ++i) {
-        means[i] = floorColor(means[i]);
-    }
+    for (i = 0; i < k; ++i)
+        means[i] = means[i].floor();
 
-    return {
-        means: means,
-        clusters: clusters
+    return { means: means, clusters: clusters };
+}
+
+function Color(red, green, blue) {
+    this.r = red;
+    this.g = green;
+    this.b = blue;
+    
+    this.equals = function(color) {
+        if (this.r == color.r && this.g == color.g && this.b == color.b)
+            return true;
+        else
+            return false;
     };
+    
+    this.add = function(color) {
+        return new Color(
+            this.r + color.r,
+            this.g + color.g,
+            this.b + color.b);
+    };
+    
+    this.divide = function(f) {
+        if (f <= 0)
+            return this;
+        return new Color(this.r / f, this.g / f, this.b / f);
+    };
+    
+    this.floor = function() {
+        return new Color(
+            Math.floor(this.r),
+            Math.floor(this.g),
+            Math.floor(this.b));
+    };
+    
+    this.squareDistance = function(color) {
+        return (
+            (this.r - color.r) * (this.r - color.r) +
+            (this.g - color.g) * (this.g - color.g) +
+            (this.b - color.b) * (this.b - color.b));
+    };
+    
+    this.toString = function()  {
+        return "rgb(" + this.r + "," + this.g + "," + this.b + ")";
+    };
+}
+
+function ColorFromHex(hex) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (result) 
+        return new Color(
+            parseInt(result[1], 16),
+            parseInt(result[2], 16),
+            parseInt(result[3], 16));
+    else
+        return new Color(255, 0, 255);
+}
+
+function ColorRandom() {
+    var min = 0;
+    var max = 0;
+    return new Color(
+        Math.floor((Math.random() * (max - min)) + min),
+        Math.floor((Math.random() * (max - min)) + min),
+        Math.floor((Math.random() * (max - min)) + min));
 }
